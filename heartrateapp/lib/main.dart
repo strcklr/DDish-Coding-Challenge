@@ -1,11 +1,49 @@
 import 'package:fab_circular_menu/fab_circular_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'blescan.dart';
+import 'package:provider/provider.dart';
+import 'ble_scanner.dart';
+import 'device_list.dart';
+
+final FlutterReactiveBle bleClient = new FlutterReactiveBle();
+DiscoveredDevice heartRateMonitor;
 
 void main() {
-  runApp(HomeRoute());
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final _ble = FlutterReactiveBle();
+  final _scanner = BleScanner(_ble);
+  runApp(
+      MultiProvider(
+        providers: [
+          Provider.value(value: _scanner),
+          // Provider.value(value: _monitor),
+          // Provider.value(value: _connector),
+          StreamProvider<BleScannerState>(
+            create: (_) => _scanner.state,
+            initialData: const BleScannerState(
+              discoveredDevices: [],
+              scanIsInProgress: false,
+            ),
+          ),
+          // StreamProvider<BleStatus>(
+          //   create: (_) => _monitor.state,
+          //   initialData: BleStatus.unknown,
+          // ),
+          // StreamProvider<ConnectionStateUpdate>(
+          //   create: (_) => _connector.state,
+          //   initialData: const ConnectionStateUpdate(
+          //     deviceId: 'Unknown device',
+          //     connectionState: DeviceConnectionState.disconnected,
+          //     failure: null,
+          //   ),
+          // ),
+        ],
+        child: HomeRoute()
+      ),
+  );
 }
 
 class HomeRoute extends StatelessWidget {
@@ -40,6 +78,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final GlobalKey<FabCircularMenuState> fabKey = GlobalKey();
   final maxHeartRateController = TextEditingController();
+  Future warning;
   int _currentHeartRate = 0;
   int _maxHeartRate = 0;
 
@@ -72,11 +111,8 @@ class _HomePageState extends State<HomePage> {
         fabColor: Colors.blueAccent,
         children: <Widget>[
           _buildMenuItem("Bluetooth Scan", Icons.bluetooth, () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => ScanRoute())
-            );
             fabKey.currentState.close();
+            startBluetoothScan();
           }),
           _buildMenuItem("Set Max Heart Rate", Icons.whatshot, () {
             return showDialog<void>(
@@ -167,10 +203,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   void checkHeartRate() {
-    if (_currentHeartRate > _maxHeartRate && _maxHeartRate != 0) {
+    if ((_currentHeartRate > _maxHeartRate) &&
+        (_maxHeartRate != 0) &&
+        (warning == null)) {
       print("Current heart rate exceeds maximum!");
       SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
-        showDialog<void>(
+        warning = showDialog<void>(
             context: context,
             barrierDismissible: false,
             builder: (BuildContext context) {
@@ -184,6 +222,7 @@ class _HomePageState extends State<HomePage> {
                       child: const Text('Ok'),
                       onPressed: () {
                         Navigator.pop(context);
+                        warning = null;
                       })
                 ],
               );
@@ -191,5 +230,22 @@ class _HomePageState extends State<HomePage> {
         );
       });
     }
+  }
+
+  void startBluetoothScan() async {
+    final device = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => DeviceListScreen())
+    );
+    if (device == null) return;
+    print("Received device: " + device.name);
+    heartRateMonitor = device;
+    final services = await bleClient.discoverServices(heartRateMonitor.id);
+    services.forEach((service) {
+      print("Service: " + service.toString());
+      service.characteristicIds.forEach((char) {
+        print("---- " + char.toString());
+      });
+    });
   }
 }

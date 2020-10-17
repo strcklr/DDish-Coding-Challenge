@@ -51,11 +51,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    checkHeartRate();
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
@@ -168,5 +164,32 @@ class _HomePageState extends State<HomePage> {
         Text(label),
       ],
     );
+  }
+
+  void checkHeartRate() {
+    if (_currentHeartRate > _maxHeartRate && _maxHeartRate != 0) {
+      print("Current heart rate exceeds maximum!");
+      SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
+        showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                contentPadding: const EdgeInsets.all(15.0),
+                title: Text("Warning!"),
+                content: Text("You've exceeded your maximum heart rate! Consider "
+                    "slowing down."),
+                actions: <Widget>[
+                  new FlatButton(
+                      child: const Text('Ok'),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      })
+                ],
+              );
+            }
+        );
+      });
+    }
   }
 }

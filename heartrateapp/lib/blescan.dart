@@ -28,8 +28,8 @@ class _ScanPageState extends State<ScanPage> {
   Widget build(BuildContext context) {
     /* TODO Add services to filter on */
     final _scanStream = bleClient.scanForDevices(withServices: [], scanMode: ScanMode.lowLatency).listen((device) {
+      if (device.name.isEmpty) return;
       if (!isDuplicate(device)) {
-        if (device.name.isEmpty) return;
         setState(() {
           _devices.add(device);
         });
@@ -74,8 +74,16 @@ class _ScanPageState extends State<ScanPage> {
       title: Text(
         device.name
       ),
-      subtitle: Text(
-        device.id
+      subtitle: Wrap(
+        spacing: 15,
+        children: <Widget>[
+          Text(
+            device.id
+          ),
+          Text(
+            "RSSI: " + device.rssi.toString()
+          )
+        ],
       ),
       leading: new Icon(
         Icons.phone_bluetooth_speaker

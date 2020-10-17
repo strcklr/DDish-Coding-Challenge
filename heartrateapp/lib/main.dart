@@ -1,4 +1,6 @@
+import 'package:fab_circular_menu/fab_circular_menu.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'blescan.dart';
 
@@ -7,23 +9,12 @@ void main() {
 }
 
 class HomeRoute extends StatelessWidget {
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     requestPerm(Permission.locationWhenInUse);
     return MaterialApp(
       title: 'Heart Rate Tracker',
-      theme: ThemeData.dark(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted
-      ),
+      theme: ThemeData.dark(),
       home: HomePage(title: 'Heart Rate Tracker'),
     );
   }
@@ -40,16 +31,6 @@ class HomeRoute extends StatelessWidget {
 
 class HomePage extends StatefulWidget {
   HomePage({Key key, this.title}) : super(key: key);
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
   final String title;
 
   @override
@@ -57,8 +38,16 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final GlobalKey<FabCircularMenuState> fabKey = GlobalKey();
+  final maxHeartRateController = TextEditingController();
   int _currentHeartRate = 0;
   int _maxHeartRate = 0;
+
+  @override
+  void dispose() {
+    maxHeartRateController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,19 +69,60 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      floatingActionButton: new FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
+      floatingActionButton: FabCircularMenu(
+        key: fabKey,
+        ringDiameter: 500,
+        ringColor: ThemeData.dark().bottomAppBarColor,
+        fabColor: Colors.blueAccent,
+        children: <Widget>[
+          _buildMenuItem("Bluetooth Scan", Icons.bluetooth, () {
+            Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => ScanRoute())
-          );
-        },
-        tooltip: 'Increment',
-        child: new Icon(
-            Icons.bluetooth,
-            color: Colors.blueAccent
-        ),
-        backgroundColor: ThemeData.dark().bottomAppBarColor,
+            );
+            fabKey.currentState.close();
+          }),
+          _buildMenuItem("Set Max Heart Rate", Icons.whatshot, () {
+            return showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  contentPadding: const EdgeInsets.all(15.0),
+                  content: new TextField(
+                    controller: maxHeartRateController,
+                    autofocus: true,
+                    maxLength: 3, /* Heart rate is 3 digit max */
+                    keyboardType: TextInputType.number,
+                    decoration: new InputDecoration(
+                      hintText: "Max Heart Rate",
+                    ),
+                  ),
+                  actions: <Widget>[
+                    new FlatButton(
+                      child: const Text('CANCEL'),
+                      onPressed: () {
+                        Navigator.pop(context);
+                      }),
+                    new FlatButton(
+                      child: const Text('SET'),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        setState(() {
+                          _maxHeartRate = int.parse(maxHeartRateController.text);
+                        });
+                      })
+                  ],
+                );
+              }
+            );
+          }),
+          _buildMenuItem("Start Workout", Icons.directions_run, () {
+            /* TODO Begin workout */
+            print("Workout started!");
+            fabKey.currentState.close();
+          })
+        ]
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
@@ -107,11 +137,11 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
-              label,
-            ),
-            Text(
               value == 0 ? "N/A" : value.toString(),
               style: Theme.of(context).textTheme.headline4,
+            ),
+            Text(
+              label,
             ),
           ],
         ),
@@ -122,4 +152,21 @@ class _HomePageState extends State<HomePage> {
       ],
     )
   );
+
+  Widget _buildMenuItem(String label, IconData icon, VoidCallback pressed) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        IconButton(
+          splashRadius: 20,
+          onPressed: pressed,
+          icon: new Icon(
+            icon,
+            color: Colors.redAccent
+          )
+        ),
+        Text(label),
+      ],
+    );
+  }
 }

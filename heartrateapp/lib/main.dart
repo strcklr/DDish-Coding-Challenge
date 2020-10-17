@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'blescan.dart';
 
 void main() {
@@ -9,6 +10,7 @@ class HomeRoute extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    requestPerm(Permission.locationWhenInUse);
     return MaterialApp(
       title: 'Heart Rate Tracker',
       theme: ThemeData.dark(
@@ -24,6 +26,15 @@ class HomeRoute extends StatelessWidget {
       ),
       home: HomePage(title: 'Heart Rate Tracker'),
     );
+  }
+
+  void requestPerm(Permission permission) async {
+    print("Requesting permission: " + permission.toString());
+    if (await permission.request().isGranted) {
+      print("Permission granted: " + permission.toString());
+    } else {
+      print("Unable to get permission: " + permission.toString());
+    }
   }
 }
 

@@ -17,22 +17,22 @@ class DeviceListScreen extends StatelessWidget {
     );
 }
 
-  class _DeviceList extends StatefulWidget {
-    const _DeviceList(
-    {@required this.scannerState,
-    @required this.startScan,
-    @required this.stopScan})
-        : assert(scannerState != null),
-    assert(startScan != null),
-    assert(stopScan != null);
+class _DeviceList extends StatefulWidget {
+  const _DeviceList(
+  {@required this.scannerState,
+  @required this.startScan,
+  @required this.stopScan})
+      : assert(scannerState != null),
+  assert(startScan != null),
+  assert(stopScan != null);
 
-    final BleScannerState scannerState;
-    final void Function(List<Uuid>) startScan;
-    final VoidCallback stopScan;
+  final BleScannerState scannerState;
+  final void Function(List<Uuid>) startScan;
+  final VoidCallback stopScan;
 
-    @override
-    _DeviceListState createState() => _DeviceListState();
-  }
+  @override
+  _DeviceListState createState() => _DeviceListState();
+}
 
 class _DeviceListState extends State<_DeviceList> {
 

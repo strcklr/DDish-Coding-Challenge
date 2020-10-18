@@ -2,25 +2,28 @@ import 'package:fab_circular_menu/fab_circular_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:heartrateapp/ble/ble_connector.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
-import 'ble_scanner.dart';
-import 'device_list.dart';
+import 'ble/ble_scanner.dart';
+import 'ble/device_list.dart';
 
-final FlutterReactiveBle bleClient = new FlutterReactiveBle();
 DiscoveredDevice heartRateMonitor;
+
+FlutterReactiveBle _ble = FlutterReactiveBle();
+BleScanner _scanner = BleScanner(_ble);
+BleDeviceConnector _connector = BleDeviceConnector(_ble);
+BleStatusMonitor _monitor = BleStatusMonitor(_ble);
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final _ble = FlutterReactiveBle();
-  final _scanner = BleScanner(_ble);
   runApp(
       MultiProvider(
         providers: [
           Provider.value(value: _scanner),
-          // Provider.value(value: _monitor),
-          // Provider.value(value: _connector),
+          Provider.value(value: _monitor),
+          Provider.value(value: _connector),
           StreamProvider<BleScannerState>(
             create: (_) => _scanner.state,
             initialData: const BleScannerState(
@@ -28,18 +31,18 @@ void main() {
               scanIsInProgress: false,
             ),
           ),
-          // StreamProvider<BleStatus>(
-          //   create: (_) => _monitor.state,
-          //   initialData: BleStatus.unknown,
-          // ),
-          // StreamProvider<ConnectionStateUpdate>(
-          //   create: (_) => _connector.state,
-          //   initialData: const ConnectionStateUpdate(
-          //     deviceId: 'Unknown device',
-          //     connectionState: DeviceConnectionState.disconnected,
-          //     failure: null,
-          //   ),
-          // ),
+          StreamProvider<BleStatus>(
+            create: (_) => _monitor.state,
+            initialData: BleStatus.unknown,
+          ),
+          StreamProvider<ConnectionStateUpdate>(
+            create: (_) => _connector.state,
+            initialData: const ConnectionStateUpdate(
+              deviceId: 'Unknown device',
+              connectionState: DeviceConnectionState.disconnected,
+              failure: null,
+            ),
+          ),
         ],
         child: HomeRoute()
       ),
@@ -95,14 +98,36 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: Text(widget.title),
       ),
-      body: Container(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: <Widget>[
-            _buildInfoColumn("Current heart rate", _currentHeartRate, Icons.favorite),
-            _buildInfoColumn("Max heart rate", _maxHeartRate, Icons.whatshot),
-          ],
-        ),
+      body: Wrap(
+        children: <Widget>[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _buildInfoColumn("Current heart rate", _currentHeartRate == 0 ?
+                "N/A" : "$_currentHeartRate", Icons.favorite),
+              _buildInfoColumn("Max heart rate", _maxHeartRate == 0 ?
+                "N/A" : _maxHeartRate, Icons.whatshot),
+            ],
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            children: <Widget>[
+              Text(
+              "Connected heart rate monitor: " + (heartRateMonitor == null ?
+                "N/A" : heartRateMonitor.name),
+              style: TextStyle(
+                  fontWeight: FontWeight.w100,
+                  fontStyle: FontStyle.italic
+                ),
+              )
+            ],
+          ),
+          Container(
+            // TODO Add graph of workout HB history
+          ),
+        ]
       ),
       floatingActionButton: FabCircularMenu(
         key: fabKey,
@@ -155,11 +180,11 @@ class _HomePageState extends State<HomePage> {
             fabKey.currentState.close();
           })
         ]
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      ),
     );
   }
 
-  Widget _buildInfoColumn(String label, int value, IconData icon) => Container(
+  Widget _buildInfoColumn(String label, String value, IconData icon) => Container(
     margin: const EdgeInsets.all(5),
     padding: const EdgeInsets.all(5) ,
     child: Row(
@@ -169,7 +194,7 @@ class _HomePageState extends State<HomePage> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
-              value == 0 ? "N/A" : value.toString(),
+              value,
               style: Theme.of(context).textTheme.headline4,
             ),
             Text(
@@ -219,11 +244,11 @@ class _HomePageState extends State<HomePage> {
                     "slowing down."),
                 actions: <Widget>[
                   new FlatButton(
-                      child: const Text('Ok'),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        warning = null;
-                      })
+                    child: const Text('Ok'),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      warning = null;
+                    })
                 ],
               );
             }
@@ -233,19 +258,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   void startBluetoothScan() async {
-    final device = await Navigator.push(
+    heartRateMonitor = await Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => DeviceListScreen())
     );
-    if (device == null) return;
-    print("Received device: " + device.name);
-    heartRateMonitor = device;
-    final services = await bleClient.discoverServices(heartRateMonitor.id);
-    services.forEach((service) {
-      print("Service: " + service.toString());
-      service.characteristicIds.forEach((char) {
-        print("---- " + char.toString());
-      });
-    });
+    if (heartRateMonitor == null) return;
+    print("Received device: " + heartRateMonitor.name);
+
+    await _connector.connect(heartRateMonitor.id);
+    await _connector.discoverServices(heartRateMonitor.id);
+    setState(() async {});
   }
 }

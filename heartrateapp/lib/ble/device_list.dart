@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:provider/provider.dart';
-
 import 'ble_scanner.dart';
 
-final Uuid _heartRateService = new Uuid.parse("0000180d-0000-1000-8000-00805f9b34fb"); 
+final Uuid _heartRateService = new Uuid.parse("0000180d-0000-1000-8000-00805f9b34fb");
 
 class DeviceListScreen extends StatelessWidget {
   @override
@@ -36,19 +35,16 @@ class DeviceListScreen extends StatelessWidget {
   }
 
 class _DeviceListState extends State<_DeviceList> {
-  TextEditingController _uuidController;
 
   @override
   void initState() {
     super.initState();
-    _uuidController = TextEditingController()
-      ..addListener(() => setState(() {}));
+    _startScanning(_heartRateService);
   }
 
   @override
   void dispose() {
     widget.stopScan();
-    _uuidController.dispose();
     super.dispose();
   }
 
@@ -58,8 +54,24 @@ class _DeviceListState extends State<_DeviceList> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.scannerState.scanIsInProgress) _startScanning(_heartRateService);
     return Scaffold(
+      appBar: AppBar(
+        actions: <Widget>[
+          FlatButton(
+            textColor: Colors.blueAccent,
+            onPressed: () {
+              if (widget.scannerState.scanIsInProgress) {
+                widget.stopScan();
+              } else {
+                _startScanning(_heartRateService);
+              }
+            },
+            child: Text(
+              widget.scannerState.scanIsInProgress ? "STOP" : "START"
+            ),
+          )
+        ],
+      ),
       body: ListView(
         children: widget.scannerState.discoveredDevices.map((device) => ListTile(
           title: Text(
@@ -81,42 +93,6 @@ class _DeviceListState extends State<_DeviceList> {
           },
         )).toList(),
       ),
-      floatingActionButton: new FloatingActionButton(
-        onPressed: () {
-          widget.stopScan();
-          Navigator.pop(context);
-        },
-        backgroundColor: ThemeData.dark().bottomAppBarColor,
-        child: new Icon(
-          Icons.arrow_back,
-          color: Colors.blue,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRow(DiscoveredDevice device) {
-    return ListTile(
-      title: Text(
-        device.name.isEmpty ? "N/A" : device.name
-      ),
-      subtitle: Wrap(
-        spacing: 15,
-        children: <Widget>[
-          Text(
-            device.id
-          ),
-          Text(
-            "RSSI: " + device.rssi.toString()
-          )
-        ],
-      ),
-      leading: new Icon(
-        Icons.phone_bluetooth_speaker
-      ),
-      onTap: () {
-        Navigator.pop(context, device);
-      },
     );
   }
 }

@@ -6,7 +6,7 @@ import 'package:heartrateapp/ble/ble_connector.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'ble/ble_scanner.dart';
-import 'ble/device_list.dart';
+import 'device_list.dart';
 
 DiscoveredDevice heartRateMonitor;
 
@@ -61,11 +61,11 @@ class HomeRoute extends StatelessWidget {
   }
 
   void requestPerm(Permission permission) async {
-    print("Requesting permission: " + permission.toString());
+    print("Requesting permission: $permission");
     if (await permission.request().isGranted) {
-      print("Permission granted: " + permission.toString());
+      print("Permission granted");
     } else {
-      print("Unable to get permission: " + permission.toString());
+      print("Permission Denied:");
     }
   }
 }
@@ -264,7 +264,6 @@ class _HomePageState extends State<HomePage> {
     );
     if (heartRateMonitor == null) return;
     print("Received device: " + heartRateMonitor.name);
-
     await _connector.connect(heartRateMonitor.id);
     await _connector.discoverServices(heartRateMonitor.id);
     setState(() async {});

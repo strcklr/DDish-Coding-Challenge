@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'ble/ble_scanner.dart';
 import 'device_list.dart';
+import 'device_detail.dart';
 
 // TODO Determine if leaving these objects here is best practice or not? Feels wrong
 DiscoveredDevice heartRateMonitor;
@@ -83,10 +84,22 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final GlobalKey<FabCircularMenuState> fabKey = GlobalKey();
   final maxHeartRateController = TextEditingController();
-  ConnectionStateUpdate connectionStateUpdate;
+  final Uuid hrService = Uuid.parse("0000180d-0000-1000-8000-00805f9b34fb");
+  ConnectionStateUpdate connectionStateUpdate = ConnectionStateUpdate(
+    deviceId: heartRateMonitor?.id,
+    connectionState: DeviceConnectionState.disconnected,
+    failure: null,
+  );
+  Consumer2<BleDeviceConnector, ConnectionStateUpdate> _consumer2;
+  DeviceDetail _deviceDetail;
   Future warning;
   int _maxHeartRate = 0;
   int _currentHeartRate = 0;
+
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   void dispose() {
@@ -97,6 +110,8 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     checkHeartRate();
+    // DeviceDetail should be null until a device is retrieved from scan
+    _deviceDetail = _buildDeviceDetail(connectionStateUpdate, heartRateMonitor);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
@@ -111,30 +126,17 @@ class _HomePageState extends State<HomePage> {
               _buildInfoColumn("Current heart rate", _currentHeartRate == 0 ?
                 "N/A" : "$_currentHeartRate", Icons.favorite),
               _buildInfoColumn("Max heart rate", _maxHeartRate == 0 ?
-                "N/A" : _maxHeartRate, Icons.whatshot),
+                "N/A" : "$_maxHeartRate", Icons.whatshot),
             ],
           ),
           Container(
             // TODO Add graph of workout HB history
           ),
           Consumer2<BleDeviceConnector, ConnectionStateUpdate>(
-            builder: (_, connector, connectionStateUpdate, __) =>
-                _DeviceDetail(
-                  device: heartRateMonitor,
-                  connectionUpdate: connectionStateUpdate != null &&
-                      connectionStateUpdate.deviceId == heartRateMonitor?.id
-                      ? connectionStateUpdate
-                      : ConnectionStateUpdate(
-                    deviceId: heartRateMonitor?.id,
-                    connectionState: DeviceConnectionState.disconnected,
-                    failure: null,
-                  ),
-                  connect: _connector.connect,
-                  disconnect: _connector.disconnect,
-                  discoverServices: _connector.discoverServices,
-                ),
-          ),
-        ]
+              builder: (_, connector, connectionStateUpdate, __) =>
+              _deviceDetail = _buildDeviceDetail(connectionStateUpdate, heartRateMonitor)
+          )
+        ],
       ),
       floatingActionButton: FabCircularMenu(
         key: fabKey,
@@ -182,7 +184,7 @@ class _HomePageState extends State<HomePage> {
             );
           }),
           _buildMenuItem("Start Workout", Icons.directions_run, () {
-            /* TODO Begin workout */
+            // TODO Begin or stop workout
             print("Workout started!");
             fabKey.currentState.close();
           })
@@ -190,6 +192,22 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+
+  Widget _buildDeviceDetail(ConnectionStateUpdate connectionStateUpdate, DiscoveredDevice device) => DeviceDetail(
+    device: device,
+    connectionUpdate: connectionStateUpdate != null &&
+    connectionStateUpdate.deviceId == device?.id
+      ? connectionStateUpdate
+          : ConnectionStateUpdate(
+      deviceId: device?.id,
+      connectionState: DeviceConnectionState.disconnected,
+      failure: null,
+    ),
+    connect: _connector.connect,
+    disconnect: _connector.disconnect,
+    discoverServices: _connector.discoverServices,
+    subscribe: _ble.subscribeToCharacteristic,
+  );
 
   Widget _buildInfoColumn(String label, String value, IconData icon) => Container(
     margin: const EdgeInsets.all(5),
@@ -264,6 +282,39 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void connectToDevice() async {
+    Uuid current = Uuid.parse("00002a37-0000-1000-8000-00805f9b34fb");
+    Uuid max = Uuid.parse("00002a8d-0000-1000-8000-00805f9b34fb");
+
+    _deviceDetail.connect(heartRateMonitor.id).whenComplete(() =>
+        Future.delayed(Duration(seconds: 5), () =>
+            _deviceDetail.discoverServices(heartRateMonitor.id).whenComplete(() =>
+                print("Services discovered!")) ));
+
+      // Subscribe to Current Heart Rate Characteristic
+    _deviceDetail.subscribe(
+      QualifiedCharacteristic(
+        characteristicId: current,
+        serviceId: hrService,
+        deviceId: heartRateMonitor.id
+      )
+    ).listen((data) {
+        print("Received data $data");
+    }, onError: (error) => print("Error listening to charac $error"));
+
+      // Subscribe to Max Heart Rate Characteristic
+    _deviceDetail.subscribe(
+        QualifiedCharacteristic(
+          characteristicId: max,
+          serviceId: hrService,
+          deviceId: heartRateMonitor.id
+      )
+    ).listen((data) {
+        print("Received data $data");
+        setState(() {});
+      }, onError: (error) => print("Error listening to charac $error"));
+  }
+
   void startBluetoothScan() async {
     heartRateMonitor = await Navigator.push(
         context,
@@ -271,71 +322,8 @@ class _HomePageState extends State<HomePage> {
     );
     if (heartRateMonitor == null) return;
     print("Received device: " + heartRateMonitor.name);
-    await _connector.connect(heartRateMonitor.id);
-
-    /* Android BLE needs some time after connecting before entering discovery phase */
-    Future.delayed(Duration(seconds: 3), () {
-      _connector.discoverServices(heartRateMonitor.id).whenComplete(() =>
-          print("Services discovered!"));
+    setState(() {
+      connectToDevice();
     });
-    setState(() {});
   }
-}
-
-class _DeviceDetail extends StatelessWidget {
-  const _DeviceDetail({
-    @required this.device,
-    @required this.connectionUpdate,
-    @required this.connect,
-    @required this.disconnect,
-    @required this.discoverServices,
-    Key key,
-  })  : assert(connect != null),
-        assert(disconnect != null),
-        assert(discoverServices != null),
-        super(key: key);
-
-  final DiscoveredDevice device;
-  final ConnectionStateUpdate connectionUpdate;
-  final void Function(String deviceId) connect;
-  final void Function(String deviceId) disconnect;
-  final void Function(String deviceId) discoverServices;
-
-  bool _deviceConnected() =>
-      connectionUpdate.connectionState == DeviceConnectionState.connected;
-
-  @override
-  Widget build(BuildContext context) {
-    if (device == null) {
-      return _buildDeviceRow("No device connected!");
-    } else if (!_deviceConnected()) {
-      connect(device.id);
-    }
-    return Wrap(
-      children: <Widget>[
-        _buildDeviceRow("HR Monitor: ${device?.name}"),
-        _buildDeviceRow("Status | ${connectionUpdate.connectionState ?? "N/A"}")
-      ],
-    );
-  }
-  
-  Widget _buildDeviceRow(String text) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Text(
-            text,
-            style: TextStyle(
-              fontWeight: FontWeight.w100,
-              fontStyle: FontStyle.italic,
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-
 }

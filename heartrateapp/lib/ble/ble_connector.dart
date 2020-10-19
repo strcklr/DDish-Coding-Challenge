@@ -22,11 +22,10 @@ class BleDeviceConnector extends ReactiveState<ConnectionStateUpdate> {
       await _connection.cancel();
     }
     _connection = _ble.connectToDevice(
-        id: deviceId,
-        // ConnectionTimeout is essential as it sets autoConnect to false
-        connectionTimeout: const Duration(seconds: 10)).listen(
-      _deviceConnectionController.add,
-    );
+      // ConnectionTimeout is essential as it sets autoConnect to false
+      connectionTimeout: Duration(seconds: 3),
+      id: deviceId,
+    ).listen(_deviceConnectionController.add,);
   }
 
   Future<void> disconnect(String deviceId) async {

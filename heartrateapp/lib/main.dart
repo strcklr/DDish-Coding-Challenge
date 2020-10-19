@@ -11,15 +11,12 @@ import 'ble/ble_scanner.dart';
 import 'device_list.dart';
 import 'device_detail.dart';
 
-// TODO Determine if leaving these objects here is best practice or not? Feels wrong
-DiscoveredDevice heartRateMonitor;
-FlutterReactiveBle _ble = FlutterReactiveBle();
-BleScanner _scanner = BleScanner(_ble);
-BleDeviceConnector _connector = BleDeviceConnector(_ble);
-BleStatusMonitor _monitor = BleStatusMonitor(_ble);
-
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterReactiveBle _ble = FlutterReactiveBle();
+  BleScanner _scanner = BleScanner(_ble);
+  BleDeviceConnector _connector = BleDeviceConnector(_ble);
+  BleStatusMonitor _monitor = BleStatusMonitor(_ble);
 
   runApp(
       MultiProvider(
@@ -27,6 +24,7 @@ void main() {
           Provider.value(value: _scanner),
           Provider.value(value: _monitor),
           Provider.value(value: _connector),
+          Provider.value(value: _ble),
           StreamProvider<BleScannerState>(
             create: (_) => _scanner.state,
             initialData: const BleScannerState(
@@ -85,17 +83,13 @@ class _HomePageState extends State<HomePage> {
   final GlobalKey<FabCircularMenuState> fabKey = GlobalKey();
   final maxHeartRateController = TextEditingController();
   final Uuid hrService = Uuid.parse("0000180d-0000-1000-8000-00805f9b34fb");
-  ConnectionStateUpdate connectionStateUpdate = ConnectionStateUpdate(
-    deviceId: heartRateMonitor?.id,
-    connectionState: DeviceConnectionState.disconnected,
-    failure: null,
-  );
-  Consumer2<BleDeviceConnector, ConnectionStateUpdate> _consumer2;
+  final Map<int, int> _heartRateHistory = new Map();
+  DiscoveredDevice heartRateMonitor;
+  ConnectionStateUpdate connectionStateUpdate;
   DeviceDetail _deviceDetail;
   Future warning;
   int _maxHeartRate = 0;
   int _currentHeartRate = 0;
-  final Map<int, int> _heartRateHistory = new Map();
 
   @override
   void initState() {
@@ -131,9 +125,9 @@ class _HomePageState extends State<HomePage> {
           Container(
             // TODO Add graph of workout HB history
           ),
-          Consumer2<BleDeviceConnector, ConnectionStateUpdate>(
-              builder: (_, connector, connectionStateUpdate, __) =>
-              _deviceDetail = _buildDeviceDetail(connectionStateUpdate, heartRateMonitor)
+          Consumer3<FlutterReactiveBle, BleDeviceConnector, ConnectionStateUpdate>(
+              builder: (_, ble, connector, connectionStateUpdate, __) =>
+              _deviceDetail = _buildDeviceDetail(ble, connector, connectionStateUpdate, heartRateMonitor)
           )
         ],
       ),
@@ -192,7 +186,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildDeviceDetail(ConnectionStateUpdate connectionStateUpdate, DiscoveredDevice device) => DeviceDetail(
+  Widget _buildDeviceDetail(FlutterReactiveBle ble, BleDeviceConnector connector, ConnectionStateUpdate connectionStateUpdate, DiscoveredDevice device) => DeviceDetail(
     device: device,
     connectionUpdate: connectionStateUpdate != null &&
     connectionStateUpdate.deviceId == device?.id
@@ -202,11 +196,11 @@ class _HomePageState extends State<HomePage> {
       connectionState: DeviceConnectionState.disconnected,
       failure: null,
     ),
-    connect: _connector.connect,
-    disconnect: _connector.disconnect,
-    discoverServices: _connector.discoverServices,
-    subscribe: _ble.subscribeToCharacteristic,
-    readCharacteristic: _ble.readCharacteristic,
+    connect: connector.connect,
+    disconnect: connector.disconnect,
+    discoverServices: connector.discoverServices,
+    subscribe: ble.subscribeToCharacteristic,
+    readCharacteristic: ble.readCharacteristic,
   );
 
   Widget _buildInfoColumn(String label, String value, IconData icon) => Container(
@@ -288,7 +282,6 @@ class _HomePageState extends State<HomePage> {
 
   void connectToDevice() async {
     Uuid current = Uuid.parse("00002a37-0000-1000-8000-00805f9b34fb");
-    Uuid max = Uuid.parse("00002a8d-0000-1000-8000-00805f9b34fb");
     QualifiedCharacteristic currentCharacteristic = QualifiedCharacteristic(
         characteristicId: current,
         serviceId: hrService,

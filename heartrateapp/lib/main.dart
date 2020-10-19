@@ -95,6 +95,7 @@ class _HomePageState extends State<HomePage> {
   Future warning;
   int _maxHeartRate = 0;
   int _currentHeartRate = 0;
+  final Map<int, int> _heartRateHistory = new Map();
 
   @override
   void initState() {
@@ -110,8 +111,6 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     checkHeartRate();
-    // DeviceDetail should be null until a device is retrieved from scan
-    _deviceDetail = _buildDeviceDetail(connectionStateUpdate, heartRateMonitor);
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
@@ -207,6 +206,7 @@ class _HomePageState extends State<HomePage> {
     disconnect: _connector.disconnect,
     discoverServices: _connector.discoverServices,
     subscribe: _ble.subscribeToCharacteristic,
+    readCharacteristic: _ble.readCharacteristic,
   );
 
   Widget _buildInfoColumn(String label, String value, IconData icon) => Container(
@@ -252,32 +252,36 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void showAlert(String title, String message) {
+    warning = showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            contentPadding: const EdgeInsets.all(15.0),
+            title: Text("Warning!"),
+            content: Text("You've exceeded your maximum heart rate! Consider "
+                "slowing down."),
+            actions: <Widget>[
+              new FlatButton(
+                  child: const Text('Ok'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    warning = null;
+                  })
+            ],
+          );
+        }
+    );
+  }
+
   void checkHeartRate() {
     if ((_currentHeartRate > _maxHeartRate) &&
         (_maxHeartRate != 0) &&
         (warning == null)) {
       print("Current heart rate exceeds maximum!");
       SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
-        warning = showDialog<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                contentPadding: const EdgeInsets.all(15.0),
-                title: Text("Warning!"),
-                content: Text("You've exceeded your maximum heart rate! Consider "
-                    "slowing down."),
-                actions: <Widget>[
-                  new FlatButton(
-                    child: const Text('Ok'),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      warning = null;
-                    })
-                ],
-              );
-            }
-        );
+        showAlert("Warning!", "You've exceeded your maximum heart rate! Consider slowing down.");
       });
     }
   }
@@ -285,34 +289,26 @@ class _HomePageState extends State<HomePage> {
   void connectToDevice() async {
     Uuid current = Uuid.parse("00002a37-0000-1000-8000-00805f9b34fb");
     Uuid max = Uuid.parse("00002a8d-0000-1000-8000-00805f9b34fb");
-
-    _deviceDetail.connect(heartRateMonitor.id).whenComplete(() =>
-        Future.delayed(Duration(seconds: 5), () =>
-            _deviceDetail.discoverServices(heartRateMonitor.id).whenComplete(() =>
-                print("Services discovered!")) ));
-
-      // Subscribe to Current Heart Rate Characteristic
-    _deviceDetail.subscribe(
-      QualifiedCharacteristic(
+    QualifiedCharacteristic currentCharacteristic = QualifiedCharacteristic(
         characteristicId: current,
         serviceId: hrService,
         deviceId: heartRateMonitor.id
-      )
-    ).listen((data) {
-        print("Received data $data");
-    }, onError: (error) => print("Error listening to charac $error"));
+    );
 
-      // Subscribe to Max Heart Rate Characteristic
-    _deviceDetail.subscribe(
-        QualifiedCharacteristic(
-          characteristicId: max,
-          serviceId: hrService,
-          deviceId: heartRateMonitor.id
-      )
-    ).listen((data) {
-        print("Received data $data");
-        setState(() {});
-      }, onError: (error) => print("Error listening to charac $error"));
+    _deviceDetail.connect(heartRateMonitor.id).whenComplete(() =>
+        Future.delayed(Duration(seconds: 5), () =>
+            _deviceDetail.discoverServices(heartRateMonitor.id).whenComplete(() async {
+              // Subscribe to Current Heart Rate Characteristic
+              _deviceDetail.subscribe(currentCharacteristic).listen((data) {
+                print("Received current data $data");
+                setState(() {
+                  _currentHeartRate = data[1];
+                });
+              }, onError: (error) => print("Error listening to charac $error"));
+            }
+          ),
+        )
+    );
   }
 
   void startBluetoothScan() async {

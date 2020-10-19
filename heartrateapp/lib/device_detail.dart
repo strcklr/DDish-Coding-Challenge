@@ -10,6 +10,7 @@ class DeviceDetail extends StatefulWidget {
     @required this.disconnect,
     @required this.discoverServices,
     @required this.subscribe,
+    @required this.readCharacteristic,
     Key key,
   });
 
@@ -19,6 +20,7 @@ class DeviceDetail extends StatefulWidget {
   final void Function(String deviceId) disconnect;
   final Future<void> Function(String deviceId) discoverServices;
   final Stream<List<int>> Function(QualifiedCharacteristic characteristic) subscribe;
+  final Future<List<int>> Function(QualifiedCharacteristic characteristic) readCharacteristic;
 
   @override
   State<StatefulWidget> createState() => _DeviceDetailState();
@@ -46,7 +48,6 @@ class _DeviceDetailState extends State<DeviceDetail> {
   }
 
   Widget _buildDeviceRow(String text) {
-    print("Building device row with text: $text, device: ${widget.device?.name}");
     return Container(
       padding: const EdgeInsets.all(10),
       child: Row(

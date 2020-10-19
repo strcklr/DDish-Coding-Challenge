@@ -40,9 +40,7 @@ class _DeviceDetailState extends State<DeviceDetail> {
       return [_buildDeviceRow("")];
     } else {
       return [
-        _buildDeviceRow("HR Monitor: ${widget.device?.name}"),
-        _buildDeviceRow(
-            "Status | ${widget.connectionUpdate?.connectionState ?? "N/A"}")
+        _buildDeviceRow("${widget.device?.name} | ${widget.connectionUpdate?.connectionState.toString() ?? "N/A"}"),
       ];
     }
   }
